@@ -7,7 +7,6 @@ import datetime
 import warnings
 warnings.filterwarnings('ignore')
 
-
 try:
     import japanize_matplotlib
 except:
@@ -20,21 +19,21 @@ st.caption("週次市場環境スコア — スイングトレード判断ツー
 HISTORY_PATH = 'data/regime_history.csv'
 
 INDICATORS = {
-    'DXY'   : 'ドル指数',
-    'TLT'   : '米長期国債ETF',
-    'HYG'   : 'ハイイールド債ETF',
+    'DXY'    : 'ドル指数',
+    'TLT'    : '米長期国債ETF',
+    'HYG'    : 'ハイイールド債ETF',
     'BAA_AAA': 'クレジットスプレッド',
-    'Y10_Y2': '長短金利差(10Y-2Y)',
-    'SCREEN': 'スクリーニング抽出数前週比',
+    'Y10_Y2' : '長短金利差(10Y-2Y)',
+    'SCREEN' : 'スクリーニング抽出数前週比',
 }
 
 BULLISH = {
-    'DXY'   : '↓',
-    'TLT'   : '↑',
-    'HYG'   : '↑',
+    'DXY'    : '↓',
+    'TLT'    : '↑',
+    'HYG'    : '↑',
     'BAA_AAA': '↓',
-    'Y10_Y2': '↑',
-    'SCREEN': '↑',
+    'Y10_Y2' : '↑',
+    'SCREEN' : '↑',
 }
 
 def calc_score(values):
@@ -47,7 +46,6 @@ def calc_score(values):
             total += 0
         else:
             total -= 1
-    # -6〜+6 を 0〜100に換算
     return round((total + 6) / 12 * 100)
 
 def get_regime(score):
@@ -77,30 +75,24 @@ def save_record(date, values, score, memo):
     hist = hist.sort_values('date')
     hist.to_csv(HISTORY_PATH, index=False, encoding='utf-8-sig')
 
-# ============================================================
-#  タブ
-# ============================================================
 tab1, tab2, tab3 = st.tabs(['📝 今週の評価', '📈 推移グラフ', '📋 履歴一覧'])
 
 with tab1:
     st.subheader('📝 今週の市場環境を入力')
-
     today = datetime.date.today()
-    # 直近土曜日を基準日にする
     days_since_sat = (today.weekday() - 5) % 7
     last_sat = today - datetime.timedelta(days=days_since_sat)
     input_date = st.date_input('基準日', value=last_sat)
-
     st.divider()
 
     values = {}
     cols_map = {
-        'DXY'   : ('DXY（ドル指数）',           '↓が株式に追い風'),
-        'TLT'   : ('TLT（米長期国債ETF）',       '↑が株式に追い風'),
-        'HYG'   : ('HYG（ハイイールド債ETF）',   '↑が株式に追い風'),
-        'BAA_AAA': ('クレジットスプレッド',        '↓が株式に追い風'),
-        'Y10_Y2': ('長短金利差（10Y-2Y）',        '↑が株式に追い風'),
-        'SCREEN': ('スクリーニング抽出数前週比',   '↑が株式に追い風'),
+        'DXY'    : ('DXY（ドル指数）',          '↓が株式に追い風'),
+        'TLT'    : ('TLT（米長期国債ETF）',      '↑が株式に追い風'),
+        'HYG'    : ('HYG（ハイイールド債ETF）',  '↑が株式に追い風'),
+        'BAA_AAA': ('クレジットスプレッド',       '↓が株式に追い風'),
+        'Y10_Y2' : ('長短金利差（10Y-2Y）',       '↑が株式に追い風'),
+        'SCREEN' : ('スクリーニング抽出数前週比',  '↑が株式に追い風'),
     }
 
     for key, (label, hint) in cols_map.items():
@@ -120,27 +112,22 @@ with tab1:
 
     st.divider()
     memo = st.text_area('📝 メモ（任意）', placeholder='今週の相場所感など...', height=80)
-
     score = calc_score(values)
     regime_label, regime_color = get_regime(score)
 
     st.divider()
     st.subheader('📊 今週のスコア')
-
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
     col1.metric('スコア', f'{score}点')
     col2.markdown(f'<h2 style="color:{regime_color}">{regime_label}</h2>', unsafe_allow_html=True)
 
-    # スコアバー
-    bar_col = regime_color
     st.markdown(f'''
     <div style="background:#1a1a1a;border-radius:10px;padding:4px;">
-        <div style="background:{bar_col};width:{score}%;height:24px;border-radius:8px;"></div>
+        <div style="background:{regime_color};width:{score}%;height:24px;border-radius:8px;"></div>
     </div>
     ''', unsafe_allow_html=True)
     st.caption(f'{score}/100')
 
-    # 内訳
     st.subheader('内訳')
     for key, (label, hint) in cols_map.items():
         v = values[key]
@@ -173,7 +160,6 @@ with tab2:
         hist['score'] = pd.to_numeric(hist['score'], errors='coerce')
         hist = hist.sort_values('date')
 
-        # スコア推移グラフ
         fig, ax = plt.subplots(figsize=(max(12, len(hist)*0.8), 5), facecolor='#0d1117')
         ax.set_facecolor('#0d1117')
         ax.tick_params(colors='#aaaaaa', labelsize=9)
@@ -181,14 +167,12 @@ with tab2:
         for spine in ax.spines.values():
             spine.set_color('#2a2a2a')
 
-        # 背景色ゾーン
         ax.axhspan(80, 100, alpha=0.08, color='#00ff88')
         ax.axhspan(60,  80, alpha=0.08, color='#4ecdc4')
         ax.axhspan(40,  60, alpha=0.08, color='#ffd93d')
         ax.axhspan(20,  40, alpha=0.08, color='#e17055')
         ax.axhspan(0,   20, alpha=0.08, color='#ff6b6b')
 
-        # ゾーンラベル
         for y, label, color in [
             (90, 'RISK-ON',      '#00ff88'),
             (70, 'CONSTRUCTIVE', '#4ecdc4'),
@@ -199,15 +183,10 @@ with tab2:
             ax.text(0.01, y, label, transform=ax.get_yaxis_transform(),
                     color=color, fontsize=8, alpha=0.6, va='center')
 
-        # ライン
-        colors_pts = []
-        for s in hist['score']:
-            rl, rc = get_regime(s)
-            colors_pts.append(rc)
-
+        colors_pts = [get_regime(s)[1] for s in hist['score']]
         ax.plot(hist['date'], hist['score'], color='white', linewidth=2.0,
                 marker='o', markersize=6, zorder=3)
-        for i, (x, y, c) in enumerate(zip(hist['date'], hist['score'], colors_pts)):
+        for x, y, c in zip(hist['date'], hist['score'], colors_pts):
             ax.scatter(x, y, color=c, s=60, zorder=4)
             ax.annotate(f'{int(y)}', xy=(x, y), xytext=(0, 8),
                         textcoords='offset points', color=c,
@@ -220,7 +199,6 @@ with tab2:
         plt.tight_layout()
         st.pyplot(fig)
 
-        # 各指標の推移
         st.subheader('📊 各指標の推移')
         indicator_cols = [k for k in INDICATORS.keys() if k in hist.columns]
         if indicator_cols:
@@ -229,28 +207,27 @@ with tab2:
                                       facecolor='#0d1117')
             if len(indicator_cols) == 1:
                 axes = [axes]
-            for ax, key in zip(axes, indicator_cols):
-                ax.set_facecolor('#0d1117')
-                ax.tick_params(colors='#aaaaaa', labelsize=8)
-                for spine in ax.spines.values():
+            for ax2, key in zip(axes, indicator_cols):
+                ax2.set_facecolor('#0d1117')
+                ax2.tick_params(colors='#aaaaaa', labelsize=8)
+                for spine in ax2.spines.values():
                     spine.set_color('#2a2a2a')
                 vals = hist[key].fillna('→')
                 colors_ind = []
                 for v in vals:
                     b = BULLISH[key]
-                    if v == b:      colors_ind.append('#00ff88')
-                    elif v == '→': colors_ind.append('#aaaaaa')
-                    else:           colors_ind.append('#ff6b6b')
-                ax.bar(range(len(hist)), [1]*len(hist), color=colors_ind, alpha=0.8)
-                ax.set_yticks([])
-                ax.set_xticks(range(len(hist)))
-                ax.set_xticklabels([d.strftime('%m/%d') for d in hist['date']],
-                                   rotation=30, fontsize=8, color='#aaaaaa')
-                ax.set_title(INDICATORS[key], color='#aaaaaa', fontsize=9, pad=4)
+                    if v == b:       colors_ind.append('#00ff88')
+                    elif v == '→':  colors_ind.append('#aaaaaa')
+                    else:            colors_ind.append('#ff6b6b')
+                ax2.bar(range(len(hist)), [1]*len(hist), color=colors_ind, alpha=0.8)
+                ax2.set_yticks([])
+                ax2.set_xticks(range(len(hist)))
+                ax2.set_xticklabels([d.strftime('%m/%d') for d in hist['date']],
+                                    rotation=30, fontsize=8, color='#aaaaaa')
+                ax2.set_title(INDICATORS[key], color='#aaaaaa', fontsize=9, pad=4)
             plt.tight_layout()
             st.pyplot(fig2)
 
-        # 月次集計
         st.subheader('📅 月次平均スコア')
         hist['month'] = hist['date'].dt.to_period('M').astype(str)
         monthly = hist.groupby('month')['score'].mean().round(1).reset_index()
@@ -280,8 +257,7 @@ with tab3:
             height=500
         )
 
-        # 削除機能
-        with st.expander('🗑 記録を削除'):
+        with st.expander('🗑️ 記録を削除'):
             del_date = st.selectbox('削除する日付', hist2['date'].tolist())
             if st.button('削除する', type='secondary'):
                 h = pd.read_csv(HISTORY_PATH)

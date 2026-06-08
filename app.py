@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
 import os
 import datetime
 import warnings
@@ -27,6 +26,11 @@ INDICATORS = {
     'SCREEN' : 'スクリーニング抽出数前週比',
 }
 
+SHORT_INDICATORS = {
+    'AD_LINE': 'ADライン（騰落線）',
+    'NH_NL'  : 'ニューハイズ／ニューロウズ',
+}
+
 BULLISH = {
     'DXY'    : '↓',
     'TLT'    : '↑',
@@ -34,11 +38,20 @@ BULLISH = {
     'BAA_AAA': '↓',
     'Y10_Y2' : '↑',
     'SCREEN' : '↑',
+    'AD_LINE': '↑',
+    'NH_NL'  : '↑',
+}
+
+SHORT_HINTS = {
+    'AD_LINE': '上昇中なら市場全体が強い',
+    'NH_NL'  : 'ニューハイ優勢なら強い',
 }
 
 def calc_score(values):
     total = 0
     for key, val in values.items():
+        if key not in BULLISH:
+            continue
         bullish = BULLISH[key]
         if val == bullish:
             total += 1
@@ -46,7 +59,23 @@ def calc_score(values):
             total += 0
         else:
             total -= 1
+    # メイン6指標: -6〜+6 → 0〜100
     return round((total + 6) / 12 * 100)
+
+def calc_short_score(values):
+    total = 0
+    for key, val in values.items():
+        if key not in BULLISH:
+            continue
+        bullish = BULLISH[key]
+        if val == bullish:
+            total += 1
+        elif val == '→':
+            total += 0
+        else:
+            total -= 1
+    # 短期2指標: -2〜+2 → 0〜100
+    return round((total + 2) / 4 * 100)
 
 def get_regime(score):
     if score >= 80: return '🟢 RISK-ON',      '#00ff88'
@@ -55,15 +84,22 @@ def get_regime(score):
     if score >= 20: return '🟠 CAUTIOUS',      '#e17055'
     return              '🔴 RISK-OFF',         '#ff6b6b'
 
+def get_short_regime(score):
+    if score >= 80: return '🟢 強い',    '#00ff88'
+    if score >= 40: return '🟡 中立',    '#ffd93d'
+    return              '🔴 弱い',      '#ff6b6b'
+
 def load_history():
     if os.path.exists(HISTORY_PATH):
         return pd.read_csv(HISTORY_PATH)
     return pd.DataFrame()
 
-def save_record(date, values, score, memo):
+def save_record(date, values, short_values, score, short_score, memo):
     os.makedirs('data', exist_ok=True)
-    row = {'date': date, 'score': score, 'memo': memo}
+    row = {'date': date, 'score': score, 'short_score': short_score, 'memo': memo}
     for k, v in values.items():
+        row[k] = v
+    for k, v in short_values.items():
         row[k] = v
     new_row = pd.DataFrame([row])
     if os.path.exists(HISTORY_PATH):
@@ -85,7 +121,6 @@ with tab1:
     input_date = st.date_input('基準日', value=last_sat)
     st.divider()
 
-    values = {}
     cols_map = {
         'DXY'    : ('DXY（ドル指数）',          '↓が株式に追い風'),
         'TLT'    : ('TLT（米長期国債ETF）',      '↑が株式に追い風'),
@@ -95,6 +130,13 @@ with tab1:
         'SCREEN' : ('スクリーニング抽出数前週比',  '↑が株式に追い風'),
     }
 
+    short_map = {
+        'AD_LINE': ('ADライン（騰落線）',         '上昇中なら市場全体が強い'),
+        'NH_NL'  : ('ニューハイズ／ニューロウズ',  'ニューハイ優勢なら強い'),
+    }
+
+    st.subheader('📊 メイン指標（中長期）')
+    values = {}
     for key, (label, hint) in cols_map.items():
         c1, c2 = st.columns([3, 2])
         with c1:
@@ -111,42 +153,80 @@ with tab1:
         values[key] = val
 
     st.divider()
+    st.subheader('⚡ 短期指標')
+    short_values = {}
+    for key, (label, hint) in short_map.items():
+        c1, c2 = st.columns([3, 2])
+        with c1:
+            st.markdown(f'**{label}**')
+            st.caption(hint)
+        with c2:
+            val = st.radio(
+                label,
+                options=['↑', '→', '↓'],
+                horizontal=True,
+                key=f'radio_{key}',
+                label_visibility='collapsed'
+            )
+        short_values[key] = val
+
+    st.divider()
     memo = st.text_area('📝 メモ（任意）', placeholder='今週の相場所感など...', height=80)
-    score = calc_score(values)
-    regime_label, regime_color = get_regime(score)
+
+    score       = calc_score(values)
+    short_score = calc_short_score(short_values)
+    regime_label, regime_color     = get_regime(score)
+    short_label,  short_color      = get_short_regime(short_score)
 
     st.divider()
     st.subheader('📊 今週のスコア')
-    col1, col2 = st.columns(2)
-    col1.metric('スコア', f'{score}点')
-    col2.markdown(f'<h2 style="color:{regime_color}">{regime_label}</h2>', unsafe_allow_html=True)
+
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric('メインスコア', f'{score}点')
+    col2.markdown(f'<h3 style="color:{regime_color}">{regime_label}</h3>', unsafe_allow_html=True)
+    col3.metric('短期スコア', f'{short_score}点')
+    col4.markdown(f'<h3 style="color:{short_color}">{short_label}</h3>', unsafe_allow_html=True)
 
     st.markdown(f'''
-    <div style="background:#1a1a1a;border-radius:10px;padding:4px;">
+    <div style="margin-bottom:4px"><small style="color:#aaa">メイン</small></div>
+    <div style="background:#1a1a1a;border-radius:10px;padding:4px;margin-bottom:12px">
         <div style="background:{regime_color};width:{score}%;height:24px;border-radius:8px;"></div>
     </div>
+    <div style="margin-bottom:4px"><small style="color:#aaa">短期</small></div>
+    <div style="background:#1a1a1a;border-radius:10px;padding:4px;">
+        <div style="background:{short_color};width:{short_score}%;height:16px;border-radius:8px;"></div>
+    </div>
     ''', unsafe_allow_html=True)
-    st.caption(f'{score}/100')
 
     st.subheader('内訳')
+    st.caption('── メイン指標 ──')
     for key, (label, hint) in cols_map.items():
         v = values[key]
         b = BULLISH[key]
         if v == b:
-            icon = '✅ +1'
-            color = '#00ff88'
+            icon = '✅ +1'; color = '#00ff88'
         elif v == '→':
-            icon = '➡️  0'
-            color = '#aaaaaa'
+            icon = '➡️  0'; color = '#aaaaaa'
         else:
-            icon = '❌ -1'
-            color = '#ff6b6b'
+            icon = '❌ -1'; color = '#ff6b6b'
+        st.markdown(f'<span style="color:{color}"><b>{icon}</b></span>　{label}：{v}', unsafe_allow_html=True)
+
+    st.caption('── 短期指標 ──')
+    for key, (label, hint) in short_map.items():
+        v = short_values[key]
+        b = BULLISH[key]
+        if v == b:
+            icon = '✅ +1'; color = '#00ff88'
+        elif v == '→':
+            icon = '➡️  0'; color = '#aaaaaa'
+        else:
+            icon = '❌ -1'; color = '#ff6b6b'
         st.markdown(f'<span style="color:{color}"><b>{icon}</b></span>　{label}：{v}', unsafe_allow_html=True)
 
     st.divider()
     if st.button('💾 記録を保存', type='primary', use_container_width=True):
-        save_record(str(input_date), values, score, memo)
-        st.success(f'✅ {input_date} のスコア {score}点 を保存しました！')
+        save_record(str(input_date), values, short_values, score, short_score, memo)
+        st.success(f'✅ {input_date} のスコア {score}点（短期:{short_score}点）を保存しました！')
         st.balloons()
 
 with tab2:
@@ -185,22 +265,31 @@ with tab2:
 
         colors_pts = [get_regime(s)[1] for s in hist['score']]
         ax.plot(hist['date'], hist['score'], color='white', linewidth=2.0,
-                marker='o', markersize=6, zorder=3)
+                marker='o', markersize=6, zorder=3, label='メインスコア')
         for x, y, c in zip(hist['date'], hist['score'], colors_pts):
             ax.scatter(x, y, color=c, s=60, zorder=4)
             ax.annotate(f'{int(y)}', xy=(x, y), xytext=(0, 8),
                         textcoords='offset points', color=c,
                         fontsize=8, fontweight='bold', ha='center')
 
+        if 'short_score' in hist.columns:
+            hist['short_score'] = pd.to_numeric(hist['short_score'], errors='coerce')
+            ax.plot(hist['date'], hist['short_score'], color='#ffd93d', linewidth=1.5,
+                    marker='s', markersize=4, linestyle='--', label='短期スコア', zorder=2)
+
         ax.set_ylim(0, 105)
         ax.set_ylabel('スコア', color='#aaaaaa', fontsize=10)
         ax.set_title('Market Regime スコア推移', color='white', fontsize=12, fontweight='bold')
+        ax.legend(facecolor='#1a1a1a', labelcolor='white', fontsize=9)
         plt.xticks(rotation=30)
         plt.tight_layout()
         st.pyplot(fig)
 
         st.subheader('📊 各指標の推移')
-        indicator_cols = [k for k in INDICATORS.keys() if k in hist.columns]
+        all_indicator_keys = list(INDICATORS.keys()) + list(SHORT_INDICATORS.keys())
+        indicator_cols = [k for k in all_indicator_keys if k in hist.columns]
+        all_indicators = {**INDICATORS, **SHORT_INDICATORS}
+
         if indicator_cols:
             fig2, axes = plt.subplots(len(indicator_cols), 1,
                                       figsize=(max(12, len(hist)*0.8), len(indicator_cols)*1.8),
@@ -224,7 +313,11 @@ with tab2:
                 ax2.set_xticks(range(len(hist)))
                 ax2.set_xticklabels([d.strftime('%m/%d') for d in hist['date']],
                                     rotation=30, fontsize=8, color='#aaaaaa')
-                ax2.set_title(INDICATORS[key], color='#aaaaaa', fontsize=9, pad=4)
+                label = all_indicators.get(key, key)
+                is_short = key in SHORT_INDICATORS
+                title_color = '#ffd93d' if is_short else '#aaaaaa'
+                prefix = '⚡ ' if is_short else ''
+                ax2.set_title(f'{prefix}{label}', color=title_color, fontsize=9, pad=4)
             plt.tight_layout()
             st.pyplot(fig2)
 
